@@ -17,15 +17,19 @@ class MockLLM:
 class LLMFactory:
     """Creates configured LLM client instances with zero-PHI protection."""
 
+    SUPPORTED_PROVIDERS = {
+        "mock", "deterministic", "test",
+        "ollama", "local",
+        "claude", "anthropic",
+        "openai", "gpt4",
+    }
+
     @staticmethod
     def create(provider: str = "mock", system_name: str = "Palliative Care Esas Symptom Agent"):
         prov = str(provider).lower()
-        if prov in ["mock", "deterministic", "test"]:
-            return MockLLM(system_name)
-        elif prov in ["ollama", "local"]:
-            return MockLLM(system_name)
-        elif prov in ["claude", "anthropic"]:
-            return MockLLM(system_name)
-        elif prov in ["openai", "gpt4"]:
-            return MockLLM(system_name)
+        if prov not in LLMFactory.SUPPORTED_PROVIDERS:
+            raise ValueError(
+                f"Unsupported LLM provider '{provider}'. "
+                f"Supported: {sorted(LLMFactory.SUPPORTED_PROVIDERS)}"
+            )
         return MockLLM(system_name)
