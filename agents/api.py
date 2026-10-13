@@ -1,19 +1,20 @@
-"""
-FastAPI REST API Server for Palliative Care Esas Symptom Agent.
-"""
-from typing import Dict, Any, List
+"""FastAPI endpoints for legacy generic audits and ESAS-r symptom profiles."""
+from typing import Any, Dict, Optional
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from .base import AuditLogger, PHIGuard
-from .models import SystemTaskPayload, ConsensusDossier
+from pydantic import BaseModel, ConfigDict, StrictInt
+
+from esas_palliative.assessment import assess_scores
+from .base import AuditLogger
+from .models import SystemTaskPayload
 from .supervisor import SystemSupervisor
 
 supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
-    title="Palliative Care Esas Symptom Agent API",
-    description="Enterprise Distributed Component Platform (Clinical & Biomedical AI)",
-    version="3.0.0-ENTERPRISE",
+    title="Palliative Care ESAS Symptom Agent API",
+    description="Legacy generic evaluation plus a separate validated ESAS-r rating endpoint.",
+    version="3.0.1",
 )
 
 
@@ -21,9 +22,15 @@ class ChatRequest(BaseModel):
     query: str
 
 
+class ESASRequest(BaseModel):
+    """No patient identifiers are accepted by this endpoint."""
+    model_config = ConfigDict(extra="forbid")
+    scores: Dict[str, Optional[StrictInt]]
+
+
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "palliative-care-esas-symptom-agent", "domain": "Clinical & Biomedical AI", "standard": "CAP / CLSI / ISO Standards", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "palliative-care-esas-symptom-agent", "version": "3.0.1"}
 
 
 @app.get("/metrics")
@@ -31,23 +38,32 @@ def metrics():
     return {
         "dossiers_processed_total": len(supervisor.dossier_registry),
         "audit_blocks_total": len(AuditLogger.get_trail()),
-        "system_status": "NOMINAL_OPTIMAL"
+        "format": "json",
     }
 
 
 @app.post("/api/audit")
 def api_audit(payload: SystemTaskPayload):
+    """Compatibility endpoint; generic metrics, not an ESAS-r clinical assessment."""
     dossier = supervisor.process_task(payload)
     return dossier.to_dict()
+
+
+@app.post("/api/esas")
+def api_esas(req: ESASRequest):
+    """Descriptive ESAS-r profile; incomplete profiles have a null total."""
+    try:
+        return assess_scores(req.scores)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/chat")
 def api_chat(req: ChatRequest):
     try:
-        ans = supervisor.query_supervisory_chat(req.query)
-        return {"response": ans}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return {"response": supervisor.query_supervisory_chat(req.query)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid query") from exc
 
 
 @app.get("/api/audit/logs")

@@ -1,27 +1,33 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "palliative-care-esas-symptom-engine"
-version = "2.0.0"
-description = "ESAS-Palliative: Edmonton Symptom Assessment System & Opioid Distress"
+name = "palliative-care-esas-symptom-agent"
+version = "3.0.1"
+description = "ESAS-r symptom profile plus legacy generic evaluation interfaces"
 readme = "README.md"
-authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
-license = { text = "MIT" }
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Topic :: Security/Cryptography",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
 requires-python = ">=3.9"
-dependencies = []
+license = { text = "MIT" }
+authors = [{ name = "Dr. Abu Suraih Sakhri" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Healthcare Industry",
+]
+dependencies = ["pydantic>=2,<3"]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110,<1", "uvicorn>=0.23,<1"]
+test = ["pytest>=8,<10", "httpx>=0.27,<1"]
 
 [project.scripts]
-palliative-care-esas-symptom-engine = "esas_palliative.cli:main"
+palliative-care-esas-symptom-agent = "esas_palliative.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/abusuraihsakhri/palliative-care-esas-symptom-engine"
-Repository = "https://github.com/abusuraihsakhri/palliative-care-esas-symptom-engine.git"
+Homepage = "https://github.com/abusuraihsakhri/palliative-care-esas-symptom-agent"
+Repository = "https://github.com/abusuraihsakhri/palliative-care-esas-symptom-agent"
+
+[tool.setuptools.packages.find]
+include = ["agents*", "esas_palliative*"]
