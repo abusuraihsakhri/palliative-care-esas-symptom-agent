@@ -1,7 +1,9 @@
 """FastAPI endpoints for legacy generic audits and ESAS-r symptom profiles."""
-from typing import Any, Dict, Optional
+import os
+from secrets import compare_digest
+from typing import Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, StrictInt
 
 from esas_palliative.assessment import assess_scores
@@ -13,7 +15,7 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Palliative Care ESAS Symptom Agent API",
-    description="Legacy generic evaluation plus a separate validated ESAS-r rating endpoint.",
+    description="Legacy generic evaluation plus a separate descriptive ESAS-r rating endpoint.",
     version="3.0.1",
 )
 
@@ -62,10 +64,14 @@ def api_esas(req: ESASRequest):
 def api_chat(req: ChatRequest):
     try:
         return {"response": supervisor.query_supervisory_chat(req.query)}
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Invalid query") from exc
+    except Exception:
+        raise HTTPException(status_code=400, detail="Unable to process supervisory query")
 
 
 @app.get("/api/audit/logs")
-def api_audit_logs():
+def api_audit_logs(x_audit_token: Optional[str] = Header(default=None)):
+    """Audit-log metadata is opt-in, not publicly exposed by default."""
+    expected = os.getenv("ESAS_AUDIT_LOG_TOKEN")
+    if not expected or not x_audit_token or not compare_digest(expected, x_audit_token):
+        raise HTTPException(status_code=403, detail="Audit-log access is not authorized")
     return {"audit_trail": AuditLogger.get_trail(), "verified": AuditLogger.verify_integrity()}
