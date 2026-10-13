@@ -1,7 +1,7 @@
 """
 Specialized Domain Worker Agents for Palliative Care Esas Symptom Agent.
 Domain: Clinical & Biomedical AI
-Standard: CAP / CLSI / ISO Standards
+Standard: Legacy generic metric checks (not ESAS-r)
 """
 import uuid
 from typing import Dict, Any, List, Optional
@@ -20,8 +20,8 @@ class InvariantQCWorker:
                 origin_worker="InvariantQCWorker",
                 urgency=UrgencyLevel.ELEVATED,
                 summary="Primary Metric Threshold Exceeded",
-                technical_details=f"Primary measurement ({payload.primary_metric:.2f}) exceeds upper reference limit (25.00) under CAP / CLSI / ISO Standards.",
-                actionable_remediation="Initiate recalibration workflow and review secondary parameters.",
+                technical_details=f"Primary generic metric ({payload.primary_metric:.2f}) exceeds the legacy demonstration threshold (25.00); this is not an ESAS-r score.",
+                actionable_remediation="Review the input and locally defined workflow; this threshold has no established clinical significance.",
             ))
         return alerts
 
@@ -37,9 +37,9 @@ class SafetyEscalationWorker:
                 alert_id=f"SAFE-{uuid.uuid4().hex[:6]}",
                 origin_worker="SafetyEscalationWorker",
                 urgency=UrgencyLevel.CRITICAL_STAT if payload.is_critical_flag else UrgencyLevel.ELEVATED,
-                summary="Critical Safety Interlock Triggered",
+                summary="Legacy Critical Flag / Secondary Threshold Triggered",
                 technical_details=f"CriticalFlag={payload.is_critical_flag} with secondary index {payload.secondary_metric:.2f}.",
-                actionable_remediation="Execute immediate closed-loop escalation and notify attending supervisor.",
+                actionable_remediation="Review the supplied critical flag under the applicable clinical protocol; the generic threshold does not establish urgency.",
             ))
         return alerts
 
@@ -56,8 +56,8 @@ class ProtocolConformanceWorker:
                 alert_id=f"CONF-{uuid.uuid4().hex[:6]}",
                 origin_worker="ProtocolConformanceWorker",
                 urgency=UrgencyLevel.ELEVATED,
-                summary="Protocol Conformance Discordance Detected",
-                technical_details=f"Descriptor '{payload.status_descriptor}' indicates discordance with CAP / CLSI / ISO Standards standards.",
-                actionable_remediation="Re-evaluate input specimen or rerun secondary confirmation assay.",
+                summary="Legacy Descriptor Match",
+                technical_details=f"Descriptor '{payload.status_descriptor}' matched a legacy keyword list; it is not a clinical protocol conformance test.",
+                actionable_remediation="Review descriptor mapping and confirm that the appropriate clinical instrument was used.",
             ))
         return alerts

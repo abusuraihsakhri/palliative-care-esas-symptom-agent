@@ -1,187 +1,86 @@
 # Palliative Care ESAS Symptom Agent
 
-> **Domain:** Clinical Decision Support & Biomedical Computing
-> **Reference Standard:** Edmonton Symptympt Assessment System-revised (ESAS-r)
+A local-first symptom assessment interface based on the nine core domains of the **Edmonton Symptom Assessment System–revised (ESAS-r)**, with a Python scoring module and optional FastAPI endpoint.
 
-<div align="center">
+The browser application is in [`web/`](web/). It works without Python, a backend, an account, or an internet connection once the static files have loaded. This project is an independent interface and is **not the official ESAS-r form or a validated clinical triage system**.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## ESAS-r assessment
 
-</div>
+- Rates **pain, tiredness, drowsiness, nausea, lack of appetite, shortness of breath, depression, anxiety, and wellbeing** on 0–10 integer scales.
+- All scores are oriented in the same direction: **0 = none/best; 10 = worst possible**. A high *wellbeing* score therefore means **worse** wellbeing.
+- Leaves unanswered items **missing**, not zero. A descriptive 0–90 total is shown **only with all nine ratings present**; individual scores remain visible.
+- Supports an optional patient-defined symptom outside the nine-item total.
+- Exports a local JSON or CSV report; optional printing. No automatic assessment history, server transmission, or database storage.
+- Does **not** apply an unvalidated total-score severity cutoff, diagnose symptoms, or recommend medication or escalation.
 
----
+A low total does not rule out a clinically important individual symptom. Use clinical judgment and the current ESAS-r administration guidance.
 
-## 📖 What It Does
+## Browser use
 
-Palliative Care ESAS Symptom Agent is a clinical decision support system implementing the Edmonton Symptom Assessment System-revised (ESAS-r). It provides:
-
-- **Symptom Score Evaluation**: Automated assessment of primary and secondary clinical metrics
-- **Multi-Agent Consensus**: Three specialized workers evaluate payloads for QC invariants, safety boundaries, and protocol conformance
-- **Risk Classification**: Multi-tier urgency classification (ROUTINE, ELEVATED, CRITICAL_STAT) with actionable recommendations
-- **Tamper-Evident Audit Trail**: HMAC-SHA256 chained cryptographic audit logs for every evaluation
-- **Zero-PHI Guard**: Active pattern detection blocking SSNs, MRNs, phone numbers, and patient identifiers from outbound data
-
----
-
-## ⚙️ Architecture
-
-```
-agents/                      # Core multi-agent evaluation system
-├── __init__.py              # Package init
-├── api.py                   # FastAPI REST server
-├── base.py                  # PHI Guard, HMAC-SHA256 Audit Trail
-├── learning.py              # Bayesian calibration engine
-├── llm_factory.py           # LLM provider abstraction
-├── metrics.py               # Prometheus metrics exporter
-├── models.py                # Pydantic data models with validation
-├── streamer.py              # WebSocket telemetry broadcaster
-├── supervisor.py            # Multi-agent orchestrator
-└── workers.py               # Specialized evaluation workers
-
-esas_palliative/             # ESAS-r domain-specific module
-├── __init__.py
-├── agents.py                # Domain-specific sub-agents
-├── cli.py                   # CLI for ESAS module
-├── engine.py                # Core domain evaluation logic
-├── models.py                # Domain data models
-└── server.py                # FastAPI server factory
-
-cli.py                       # Main CLI entry point
-enrichment.py                # Feature enrichment engines
-simulator.py                 # High-throughput stress testing
-web/index.html               # Operations console UI
-```
-
----
-
-## 💻 Installation
+Serve the `web/` folder with any static web server (the app uses an ES module, so opening via `file://` may fail in browsers):
 
 ```bash
-# Clone the repository
-git clone https://github.com/abusuraihsakhri/palliative-care-esas-symptom-agent.git
-cd palliative-care-esas-symptom-agent
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-
-# Install dependencies
-pip install fastapi uvicorn pydantic pytest
-
-# Set required environment variable
-export AUDIT_SECRET_KEY="your-secure-random-key-here"
+python -m http.server 8000 --directory web
 ```
 
----
+Open `http://localhost:8000/`. Enter ratings, inspect the separate symptom values, and choose **Export JSON**, **Export CSV**, or **Print**. All nine core ratings must be present before the descriptive total is calculated; partial reports can still be exported with blanks.
 
-## 🚀 Usage
+The static app uses standard HTML, CSS, and native JavaScript modules. It requires no Pyodide, installation, external fonts, or remote service. Compatible with modern browsers supporting ES modules.
 
-### CLI Commands
+## Python scoring
+
+Python 3.9+ is supported:
 
 ```bash
-# Run single task evaluation
-python cli.py audit --task-id TASK-001 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
+python -m pip install -e ".[api,test]"
+python -m pytest -q
+node --test web/esas-core.test.mjs  # optional; Node 22
+```
 
-# Interactive chat with supervisor
-python cli.py chat "What is the system status?"
+```python
+from esas_palliative.assessment import SYMPTOMS, assess_scores
 
-# Batch process CSV records
-python cli.py batch -i sample.csv -o results.csv
+values = dict.fromkeys(SYMPTOMS, 0)
+values["pain"] = 7
+profile = assess_scores(values)
+assert profile["total"] == 7
+```
 
-# Verify audit trail integrity
-python cli.py verify-audit
+Use the separately scoped REST endpoint for ESAS-r scores:
 
-# Launch REST API server
+```bash
+export AUDIT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 python cli.py serve --host 127.0.0.1 --port 8000
+
+curl -s http://127.0.0.1:8000/api/esas \
+  -H 'Content-Type: application/json' \
+  -d '{"scores":{"pain":7,"tiredness":0,"drowsiness":0,"nausea":0,"lack_of_appetite":0,"shortness_of_breath":0,"depression":0,"anxiety":0,"wellbeing":0}}'
 ```
 
-### REST API
+`POST /api/esas` requires a `scores` mapping. All values must be integers in 0–10 or `null`; absent items remain unassessed. Extra request fields or unexpected symptom names return HTTP 422. No identifying information is accepted by this endpoint.
 
-| Endpoint | Method | Description |
-|:---------|:-------|:------------|
-| `/health` | GET | Service health check |
-| `/metrics` | GET | Operational metrics |
-| `/api/audit` | POST | Submit task for evaluation |
-| `/api/chat` | POST | Query supervisory chat |
-| `/api/audit/logs` | GET | Retrieve audit trail |
+### Compatibility interfaces
 
-### Example API Request
+The repository also retains the earlier generic audit workflows: `python cli.py audit`, `python cli.py batch`, `python cli.py chat`, `python cli.py verify-audit`, and the installed `palliative-care-esas-symptom-agent` CLI (which uses `esas_palliative.cli`). The pre-existing `POST /api/audit` and `POST /api/chat` endpoints remain **generic metric evaluations, not implementations of the ESAS-r symptom scale**. Their arbitrary numeric thresholds and alerts must not be used for patient care.
 
-```bash
-curl -X POST http://localhost:8000/api/audit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_id": "TASK-001",
-    "target_identifier": "TARGET-01",
-    "primary_metric": 28.4,
-    "secondary_metric": 14.2,
-    "is_critical_flag": true,
-    "status_descriptor": "DISCORDANT"
-  }'
-```
+The backend additionally exposes `GET /health`, `GET /metrics` (JSON counters), and `GET /api/audit/logs`. Audit-log retrieval is **disabled by default**; set `ESAS_AUDIT_LOG_TOKEN` on the API server and pass that value in the `X-Audit-Token` header to access it. HMAC signing of legacy audit records requires `AUDIT_SECRET_KEY` (an environment secret, never placed in browser code).
 
----
+For containerized local runs, set `AUDIT_SECRET_KEY` in a private `.env` file and run `docker compose up --build`. The API is not intended to be exposed directly to the internet without access control, TLS, and a suitable institutional privacy/security review.
 
-## 🧪 Testing
+## Privacy and limitations
 
-```bash
-# Set test environment variable
-export AUDIT_SECRET_KEY="test-audit-key"
+The browser application stores nothing persistently and makes no API calls. Data stays in the page until cleared or closed, except for report files users intentionally save or print. Avoid identifiers in the optional free-text symptom field if a report may be shared.
 
-# Run full test suite
-pytest -v
+The optional Python server uses an in-memory registry for the generic legacy API and HMAC audit signatures. Its regex-based identifier checks are **not comprehensive de-identification**, nor a guarantee of HIPAA or other regulatory compliance. Do not input real patient-identifiable data into the generic endpoints without an institutional security assessment.
 
-# Run with coverage
-pytest -v --cov=agents --cov=esas_palliative
+The app is a **symptom documentation aid**, not a medical device, emergency response system, clinical diagnostic service, or opioid dose converter. It does not replace professional assessment.
 
-# Run stress simulation
-python simulator.py 1000
-```
+## References
 
----
+- [Alberta Health Services — Symptom Assessment Tools (ESAS-r)](https://www.albertahealthservices.ca/info/page14546.aspx)
+- [ESAS-r Administration Manual (Alberta Health Services)](https://www.albertahealthservices.ca/assets/info/peolc/if-peolc-ed-esasr-admin-manual.pdf)
+- Watanabe SM et al. *J Pain Symptom Manage.* 2011;41(2):456–468. [DOI: 10.1016/j.jpainsymman.2010.04.020](https://doi.org/10.1016/j.jpainsymman.2010.04.020)
 
-## 🐳 Docker Deployment
+## License
 
-```bash
-# Create .env file
-echo "AUDIT_SECRET_KEY=$(openssl rand -hex 32)" > .env
-
-# Build and run
-docker-compose up --build
-
-# Or manual Docker
-docker build -t palliative-care-esas-symptom-agent .
-docker run -p 8000:8000 --env-file .env palliative-care-esas-symptom-agent
-```
-
----
-
-## 🛡️ Security Features
-
-| Feature | Implementation |
-|:--------|:---------------|
-| **PHI Outbound Guard** | Regex patterns detect SSNs, MRNs, emails, phone numbers, DOBs, patient names |
-| **Audit Trail** | HMAC-SHA256 chained blocks with tamper detection |
-| **Input Validation** | Pydantic models with bounds checking and length limits |
-| **Secret Management** | `AUDIT_SECRET_KEY` env var required; no hardcoded defaults |
-| **Error Handling** | Graceful handling of file I/O errors, malformed CSV, invalid values |
-
----
-
-## 📋 Environment Variables
-
-| Variable | Required | Description |
-|:---------|:---------|:------------|
-| `AUDIT_SECRET_KEY` | Yes | Secret key for HMAC-SHA256 audit trail signing |
-| `MODEL_PROVIDER` | No | LLM provider (mock, ollama, claude, openai). Default: mock |
-
----
-
-## 📄 License
-
-MIT License. See [LICENSE](LICENSE) for details.
+[MIT](LICENSE).

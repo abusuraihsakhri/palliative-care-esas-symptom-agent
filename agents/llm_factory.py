@@ -1,5 +1,5 @@
 """
-Inference Engine supporting local Ollama, Claude, OpenAI, and deterministic Mock with Zero-PHI checks.
+Deterministic placeholder response factory (no external inference providers configured).
 """
 from typing import Dict, Any, Optional
 from .base import PHIGuard
@@ -11,17 +11,14 @@ class MockLLM:
 
     def invoke(self, prompt: str) -> str:
         PHIGuard.assert_no_phi(prompt)
-        return f"[{self.system_name} Deterministic Verification Engine]: Clinical & scientific analysis verified for query: '{prompt[:60]}...'. Parameters evaluated under CAP / CLSI / ISO Standards."
+        return f"[{self.system_name} offline mock]: No clinical analysis was performed. Received query: '{prompt[:60]}...'."
 
 
 class LLMFactory:
-    """Creates configured LLM client instances with zero-PHI protection."""
+    """Creates only the implemented offline mock with identifier-pattern screening."""
 
     SUPPORTED_PROVIDERS = {
         "mock", "deterministic", "test",
-        "ollama", "local",
-        "claude", "anthropic",
-        "openai", "gpt4",
     }
 
     @staticmethod
@@ -30,6 +27,6 @@ class LLMFactory:
         if prov not in LLMFactory.SUPPORTED_PROVIDERS:
             raise ValueError(
                 f"Unsupported LLM provider '{provider}'. "
-                f"Supported: {sorted(LLMFactory.SUPPORTED_PROVIDERS)}"
+                "Only the offline mock provider is implemented; remote providers are not configured."
             )
         return MockLLM(system_name)
